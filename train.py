@@ -261,7 +261,7 @@ if __name__ == "__main__":
     else:
         initial_weights = None
 
-    print('initial_weights',initial_weights)    
+    # print('initial_weights',initial_weights)    
     train(learn_rate=0.001,
           report_steps=20,
           batch_size=50,
