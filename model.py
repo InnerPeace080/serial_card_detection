@@ -1,15 +1,15 @@
 # Copyright (c) 2016 Matthew Earl
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 #     The above copyright notice and this permission notice shall be included
 #     in all copies or substantial portions of the Software.
-# 
+#
 #     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
 #     OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 #     MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
@@ -20,7 +20,7 @@
 
 
 """
-Definition of the neural networks. 
+Definition of the neural networks.
 
 """
 
@@ -37,7 +37,7 @@ import tensorflow as tf
 import common
 
 
-WINDOW_SHAPE = (64, 128)
+WINDOW_SHAPE = (64, 256)
 
 
 # Utility functions
@@ -101,26 +101,26 @@ def convolutional_layers():
 
 def get_training_model():
     """
-    The training model acts on a batch of 128x64 windows, and outputs a (1 +
-    7 * len(common.CHARS) vector, `v`. `v[0]` is the probability that a plate is
+    The training model acts on a batch of 256x64 windows, and outputs a (1 +
+    13 * len(common.CHARS) vector, `v`. `v[0]` is the probability that a plate is
     fully within the image and is at the correct scale.
-    
+
     `v[1 + i * len(common.CHARS) + c]` is the probability that the `i`'th
     character is `c`.
 
     """
     x, conv_layer, conv_vars = convolutional_layers()
-    
+
     # Densely connected layer
-    W_fc1 = weight_variable([32 * 8 * 128, 2048])
+    W_fc1 = weight_variable([64 * 8 * 128, 2048])
     b_fc1 = bias_variable([2048])
 
-    conv_layer_flat = tf.reshape(conv_layer, [-1, 32 * 8 * 128])
+    conv_layer_flat = tf.reshape(conv_layer, [-1, 64 * 8 * 128])
     h_fc1 = tf.nn.relu(tf.matmul(conv_layer_flat, W_fc1) + b_fc1)
 
     # Output layer
-    W_fc2 = weight_variable([2048, 1 + 7 * len(common.CHARS)])
-    b_fc2 = bias_variable([1 + 7 * len(common.CHARS)])
+    W_fc2 = weight_variable([2048, 1 + 13 * len(common.CHARS)])
+    b_fc2 = bias_variable([1 + 13 * len(common.CHARS)])
 
     y = tf.matmul(h_fc1, W_fc2) + b_fc2
 
@@ -130,25 +130,24 @@ def get_training_model():
 def get_detect_model():
     """
     The same as the training model, except it acts on an arbitrarily sized
-    input, and slides the 128x64 window across the image in 8x8 strides.
+    input, and slides the 256x64 window across the image in 8x8 strides.
 
     The output is of the form `v`, where `v[i, j]` is equivalent to the output
     of the training model, for the window at coordinates `(8 * i, 4 * j)`.
 
     """
     x, conv_layer, conv_vars = convolutional_layers()
-    
+
     # Fourth layer
-    W_fc1 = weight_variable([8 * 32 * 128, 2048])
-    W_conv1 = tf.reshape(W_fc1, [8,  32, 128, 2048])
+    W_fc1 = weight_variable([8 * 64 * 128, 2048])
+    W_conv1 = tf.reshape(W_fc1, [8,  64, 128, 2048])
     b_fc1 = bias_variable([2048])
     h_conv1 = tf.nn.relu(conv2d(conv_layer, W_conv1,
-                                stride=(1, 1), padding="VALID") + b_fc1) 
+                                stride=(1, 1), padding="VALID") + b_fc1)
     # Fifth layer
-    W_fc2 = weight_variable([2048, 1 + 7 * len(common.CHARS)])
-    W_conv2 = tf.reshape(W_fc2, [1, 1, 2048, 1 + 7 * len(common.CHARS)])
-    b_fc2 = bias_variable([1 + 7 * len(common.CHARS)])
+    W_fc2 = weight_variable([2048, 1 + 13 * len(common.CHARS)])
+    W_conv2 = tf.reshape(W_fc2, [1, 1, 2048, 1 + 13 * len(common.CHARS)])
+    b_fc2 = bias_variable([1 + 13 * len(common.CHARS)])
     h_conv2 = conv2d(h_conv1, W_conv2) + b_fc2
 
     return (x, h_conv2, conv_vars + [W_fc1, b_fc1, W_fc2, b_fc2])
-

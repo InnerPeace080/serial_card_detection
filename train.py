@@ -1,17 +1,17 @@
 #!/usr/bin/env python
 #
 # Copyright (c) 2016 Matthew Earl
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 #     The above copyright notice and this permission notice shall be included
 #     in all copies or substantial portions of the Software.
-# 
+#
 #     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
 #     OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 #     MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
@@ -63,8 +63,8 @@ def code_to_vec(p, code):
 def read_data(img_glob):
     for fname in sorted(glob.glob(img_glob)):
         im = cv2.imread(fname)[:, :, 0].astype(numpy.float32) / 255.
-        code = fname.split("/")[1][9:16]
-        p = fname.split("/")[1][17] == '1'
+        code = fname.split("/")[1][9:22]
+        p = fname.split("/")[1][23] == '1'
         yield im, code_to_vec(p, code)
 
 
@@ -96,7 +96,7 @@ def mpgen(f):
 
     @functools.wraps(f)
     def wrapped(*args, **kwargs):
-        q = multiprocessing.Queue(3) 
+        q = multiprocessing.Queue(3)
         proc = multiprocessing.Process(target=main,
                                        args=(q, args, kwargs))
         proc.start()
@@ -109,11 +109,11 @@ def mpgen(f):
             proc.join()
 
     return wrapped
-        
+
 
 @mpgen
 def read_batches(batch_size):
-    g = gen.generate_ims()
+    g = gen.generate_ims(0)
     def gen_vecs():
         for im, c, p in itertools.islice(g, batch_size):
             yield im, code_to_vec(p, c)
@@ -123,22 +123,23 @@ def read_batches(batch_size):
 
 
 def get_loss(y, y_):
+
     # Calculate the loss from digits being incorrect.  Don't count loss from
     # digits that are in non-present plates.
     digits_loss = tf.nn.softmax_cross_entropy_with_logits(
-                                          tf.reshape(y[:, 1:],
+                                          logits=tf.reshape(y[:, 1:],
                                                      [-1, len(common.CHARS)]),
-                                          tf.reshape(y_[:, 1:],
+                                          labels=tf.reshape(y_[:, 1:],
                                                      [-1, len(common.CHARS)]))
-    digits_loss = tf.reshape(digits_loss, [-1, 7])
+    digits_loss = tf.reshape(digits_loss, [-1, 13])
     digits_loss = tf.reduce_sum(digits_loss, 1)
     digits_loss *= (y_[:, 0] != 0)
     digits_loss = tf.reduce_sum(digits_loss)
 
     # Calculate the loss from presence indicator being wrong.
     presence_loss = tf.nn.sigmoid_cross_entropy_with_logits(
-                                                          y[:, :1], y_[:, :1])
-    presence_loss = 7 * tf.reduce_sum(presence_loss)
+                                                          logits=y[:, :1],labels=y_[:, :1])
+    presence_loss = 13 * tf.reduce_sum(presence_loss)
 
     return digits_loss, presence_loss, digits_loss + presence_loss
 
@@ -169,13 +170,13 @@ def train(learn_rate, report_steps, batch_size, initial_weights=None):
     """
     x, y, params = model.get_training_model()
 
-    y_ = tf.placeholder(tf.float32, [None, 7 * len(common.CHARS) + 1])
+    y_ = tf.placeholder(tf.float32, [None, 13 * len(common.CHARS) + 1])
 
     digits_loss, presence_loss, loss = get_loss(y, y_)
     train_step = tf.train.AdamOptimizer(learn_rate).minimize(loss)
 
-    best = tf.argmax(tf.reshape(y[:, 1:], [-1, 7, len(common.CHARS)]), 2)
-    correct = tf.argmax(tf.reshape(y_[:, 1:], [-1, 7, len(common.CHARS)]), 2)
+    best = tf.argmax(tf.reshape(y[:, 1:], [-1, 13, len(common.CHARS)]), 2)
+    correct = tf.argmax(tf.reshape(y_[:, 1:], [-1, 13, len(common.CHARS)]), 2)
 
     if initial_weights is not None:
         assert len(params) == len(initial_weights)
@@ -229,7 +230,7 @@ def train(learn_rate, report_steps, batch_size, initial_weights=None):
         if initial_weights is not None:
             sess.run(assign_ops)
 
-        test_xs, test_ys = unzip(list(read_data("test/*.png"))[:50])
+        test_xs, test_ys = unzip(list(read_data("test/*.png"))[:100])
 
         try:
             last_batch_idx = 0
@@ -260,8 +261,8 @@ if __name__ == "__main__":
     else:
         initial_weights = None
 
+    print('initial_weights',initial_weights)    
     train(learn_rate=0.001,
           report_steps=20,
           batch_size=50,
           initial_weights=initial_weights)
-
