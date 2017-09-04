@@ -50,14 +50,15 @@ import model
 
 
 def code_to_vec(p, code):
-    def char_to_vec(c):
-        y = numpy.zeros((len(common.CHARS),))
-        y[common.CHARS.index(c)] = 1.0
-        return y
-
-    c = numpy.vstack([char_to_vec(c) for c in code])
-
-    return numpy.concatenate([[1. if p else 0], c.flatten()])
+    # def char_to_vec(c):
+    #     y = numpy.zeros((len(common.CHARS),))
+    #     y[common.CHARS.index(c)] = 1.0
+    #     return y
+    #
+    # c = numpy.vstack([char_to_vec(c) for c in code])
+    #
+    # return numpy.concatenate([[1. if p else 0], c.flatten()])
+    return [1. if p else 0]
 
 
 def read_data(img_glob):
@@ -127,21 +128,20 @@ def get_loss(y, y_):
     # Calculate the loss from digits being incorrect.  Don't count loss from
     # digits that are in non-present plates.
     digits_loss = tf.nn.softmax_cross_entropy_with_logits(
-                                          logits=tf.reshape(y[:, 1:],
-                                                     [-1, len(common.CHARS)]),
-                                          labels=tf.reshape(y_[:, 1:],
-                                                     [-1, len(common.CHARS)]))
-    digits_loss = tf.reshape(digits_loss, [-1, 13])
-    digits_loss = tf.reduce_sum(digits_loss, 1)
-    digits_loss *= (y_[:, 0] != 0)
-    digits_loss = tf.reduce_sum(digits_loss)
+                                          logits=y[:, 1:],
+                                          labels=y_[:, 1:])
+    # digits_loss = tf.reshape(digits_loss, [-1, 13])
+    # digits_loss = tf.reduce_sum(digits_loss, 1)
+    # digits_loss *= (y_[:, 0] != 0)
+    # digits_loss = tf.reduce_sum(digits_loss)
 
     # Calculate the loss from presence indicator being wrong.
     presence_loss = tf.nn.sigmoid_cross_entropy_with_logits(
                                                           logits=y[:, :1],labels=y_[:, :1])
-    presence_loss = 13 * tf.reduce_sum(presence_loss)
+    # presence_loss = 13 * tf.reduce_sum(presence_loss)
+    presence_loss =  tf.reduce_sum(presence_loss)
 
-    return digits_loss, presence_loss, digits_loss + presence_loss
+    return digits_loss, presence_loss,  presence_loss
 
 
 def train(learn_rate, report_steps, batch_size, initial_weights=None):
@@ -170,13 +170,13 @@ def train(learn_rate, report_steps, batch_size, initial_weights=None):
     """
     x, y, params = model.get_training_model()
 
-    y_ = tf.placeholder(tf.float32, [None, 13 * len(common.CHARS) + 1])
+    y_ = tf.placeholder(tf.float32, [None,  1])
 
     digits_loss, presence_loss, loss = get_loss(y, y_)
     train_step = tf.train.AdamOptimizer(learn_rate).minimize(loss)
 
-    best = tf.argmax(tf.reshape(y[:, 1:], [-1, 13, len(common.CHARS)]), 2)
-    correct = tf.argmax(tf.reshape(y_[:, 1:], [-1, 13, len(common.CHARS)]), 2)
+    best =  tf.argmax(y[:, 1:], 0)
+    correct = tf.argmax(y_[:, 1:], 0)
 
     if initial_weights is not None:
         assert len(params) == len(initial_weights)
@@ -188,41 +188,41 @@ def train(learn_rate, report_steps, batch_size, initial_weights=None):
         return "".join(common.CHARS[i] for i in v)
 
     def do_report():
-        r = sess.run([best,
-                      correct,
-                      tf.greater(y[:, 0], 0),
+        r = sess.run([tf.greater(y[:, 0], 0),
                       y_[:, 0],
-                      digits_loss,
                       presence_loss,
                       loss],
                      feed_dict={x: test_xs, y_: test_ys})
-        num_correct = numpy.sum(
-                        numpy.logical_or(
-                            numpy.all(r[0] == r[1], axis=1),
-                            numpy.logical_and(r[2] < 0.5,
-                                              r[3] < 0.5)))
-        r_short = (r[0][:190], r[1][:190], r[2][:190], r[3][:190])
-        for b, c, pb, pc in zip(*r_short):
-            print "{} {} <-> {} {}".format(vec_to_plate(c), pc,
-                                           vec_to_plate(b), float(pb))
-        num_p_correct = numpy.sum(r[2] == r[3])
 
-        print ("B{:3d} {:2.02f}% {:02.02f}% loss: {} "
-               "(digits: {}, presence: {}) |{}|").format(
+        print(r[0],r[1])
+        # num_correct = numpy.sum(
+        #                 numpy.logical_or(
+        #                     numpy.all(r[0] == r[1], axis=1),
+        #                     numpy.logical_and(r[2] < 0.5,
+        #                                       r[3] < 0.5)))
+        r_short = (r[0][:190], r[1][:190])
+        for  pb, pc in zip(*r_short):
+            print "{} <-> {}".format( pc,float(pb))
+        num_p_correct = numpy.sum(r[0] == r[1])
+        #
+        print ("B{:3d} {:02.02f}% loss: {} "
+               "( presence: {}) ").format(
             batch_idx,
-            100. * num_correct / (len(r[0])),
-            100. * num_p_correct / len(r[2]),
-            r[6],
-            r[4],
-            r[5],
-            "".join("X "[numpy.array_equal(b, c) or (not pb and not pc)]
-                                           for b, c, pb, pc in zip(*r_short)))
+            # 100. * num_correct / (len(r[0])),
+            100. * num_p_correct / len(r[0]),
+            r[2],
+            r[3])
+            # r[5],
+            # "".join("X "[numpy.array_equal(b, c) or (not pb and not pc)]
+            #                                for b, c, pb, pc in zip(*r_short)))
 
     def do_batch():
         sess.run(train_step,
                  feed_dict={x: batch_xs, y_: batch_ys})
         if batch_idx % report_steps == 0:
+            print("do report")
             do_report()
+
 
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.95)
     with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
@@ -261,7 +261,7 @@ if __name__ == "__main__":
     else:
         initial_weights = None
 
-    # print('initial_weights',initial_weights)    
+    # print('initial_weights',initial_weights)
     train(learn_rate=0.001,
           report_steps=20,
           batch_size=50,

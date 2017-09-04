@@ -117,13 +117,13 @@ def detect(im, param_vals):
     for i, (scaled_im, y_val) in enumerate(zip(scaled_ims, y_vals)):
         print("Interpret", i,scaled_im.shape,y_val.shape)
         for window_coords in numpy.argwhere(y_val[0, :, :, 0] > #-2 ):
-                                                       -math.log(1./0.6 - 1)):
+                                                       -math.log(1./0.5 - 1)):
             print("window_coords",window_coords)
-            letter_probs = (y_val[0,
-                                  window_coords[0],
-                                  window_coords[1], 1:].reshape(
-                                    13, len(common.CHARS)))
-            letter_probs = common.softmax(letter_probs)
+            # letter_probs = (y_val[0,
+            #                       window_coords[0],
+            #                       window_coords[1], 1:].reshape(
+            #                         13, len(common.CHARS)))
+            # letter_probs = common.softmax(letter_probs)
 
             img_scale = float(im.shape[0]) / scaled_im.shape[0]
 
@@ -150,11 +150,11 @@ def _group_overlapping_rectangles(matches):
     num_groups = 0
     match_to_group = {}
     for idx1 in range(len(matches)):
-        for idx2 in range(idx1):
-            if _overlaps(matches[idx1], matches[idx2]):
-                match_to_group[idx1] = match_to_group[idx2]
-                break
-        else:
+        # for idx2 in range(idx1):
+        #     if _overlaps(matches[idx1], matches[idx2]):
+        #         match_to_group[idx1] = match_to_group[idx2]
+        #         break
+        # else:
             match_to_group[idx1] = num_groups
             num_groups += 1
 
@@ -200,31 +200,31 @@ if __name__ == "__main__":
     f = numpy.load(sys.argv[2])
     param_vals = [f[n] for n in sorted(f.files, key=lambda s: int(s[4:]))]
 
-    for pt1, pt2, present_prob, letter_probs in post_process(
+    for pt1, pt2, present_prob in post_process(
                                                   detect(im_gray, param_vals)):
         pt1 = tuple(reversed(map(int, pt1)))
         pt2 = tuple(reversed(map(int, pt2)))
 
-        code = letter_probs_to_code(letter_probs)
+        # code = letter_probs_to_code(letter_probs)
 
         color = (0.0, 255.0, 0.0)
         cv2.rectangle(im, pt1, pt2, color)
 
-        print(code)
-        cv2.putText(im,
-                    code,
-                    pt1,
-                    cv2.FONT_HERSHEY_PLAIN,
-                    1.5,
-                    (0, 0, 0),
-                    thickness=5)
-
-        cv2.putText(im,
-                    code,
-                    pt1,
-                    cv2.FONT_HERSHEY_PLAIN,
-                    1.5,
-                    (255, 255, 255),
-                    thickness=2)
+        # print(code)
+        # cv2.putText(im,
+        #             code,
+        #             pt1,
+        #             cv2.FONT_HERSHEY_PLAIN,
+        #             1.5,
+        #             (0, 0, 0),
+        #             thickness=5)
+        #
+        # cv2.putText(im,
+        #             code,
+        #             pt1,
+        #             cv2.FONT_HERSHEY_PLAIN,
+        #             1.5,
+        #             (255, 255, 255),
+        #             thickness=2)
 
     cv2.imwrite(sys.argv[3], im)

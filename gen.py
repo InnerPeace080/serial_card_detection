@@ -104,6 +104,8 @@ def pick_colors():
         if text_color > plate_color:
             text_color, plate_color = plate_color, text_color
         first = False
+
+    text_color = random.random() * 0.7 + (-1)
     return text_color, plate_color
 
 
@@ -216,10 +218,12 @@ def generate_plate(font_height, char_ims):
         text_mask[iy:iy + char_im.shape[0], ix:ix + char_im.shape[1]] = char_im
         x += char_im.shape[1] + spacing
 
-    plate = (numpy.ones(out_shape) * plate_color * (1. - text_mask) +
-             numpy.ones(out_shape) * text_color * text_mask)
+    # plate = (numpy.ones(out_shape) * plate_color * (1. - text_mask) +
+    #          numpy.ones(out_shape) * text_color * text_mask)
 
-    return plate, rounded_rect(out_shape, radius), code.replace(" ", "")
+    plate =  numpy.ones(out_shape) * text_color * text_mask
+
+    return plate, rounded_rect(out_shape, radius),text_mask , code.replace(" ", "")
 
 
 def generate_bg(num_bg_images):
@@ -241,20 +245,24 @@ def generate_bg(num_bg_images):
 def generate_im(char_ims, num_bg_images):
     bg = generate_bg(num_bg_images)
 
-    plate, plate_mask, code = generate_plate(FONT_HEIGHT, char_ims)
+    plate, plate_mask,text_mask, code = generate_plate(FONT_HEIGHT, char_ims)
 
     M, out_of_bounds = make_affine_transform(
                             from_shape=plate.shape,
                             to_shape=bg.shape,
-                            min_scale=0.6,
-                            max_scale=0.875,
+                            min_scale=0.7,
+                            max_scale=0.9,
                             rotation_variation=1.0,
                             scale_variation=1.5,
                             translation_variation=1.2)
     plate = cv2.warpAffine(plate, M, (bg.shape[1], bg.shape[0]))
     plate_mask = cv2.warpAffine(plate_mask, M, (bg.shape[1], bg.shape[0]))
 
-    out = plate * plate_mask + bg * (1.0 - plate_mask)
+    text_mask = cv2.warpAffine(text_mask, M, (bg.shape[1], bg.shape[0]))
+
+    # out = plate * plate_mask + bg * (1.0 - plate_mask)
+    # print(text_mask)
+    out =   (plate *text_mask)   + (bg * (1-text_mask) ) 
     # out = bg
 
     out = cv2.resize(out, (OUTPUT_SHAPE[1], OUTPUT_SHAPE[0]))
