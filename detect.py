@@ -1,17 +1,17 @@
 #!/usr/bin/env python
 #
 # Copyright (c) 2016 Matthew Earl
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 #     The above copyright notice and this permission notice shall be included
 #     in all copies or substantial portions of the Software.
-# 
+#
 #     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
 #     OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 #     MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
@@ -50,11 +50,22 @@ import model
 
 
 def make_scaled_ims(im, min_shape):
-    ratio = 1. / 2 ** 0.5
-    shape = (im.shape[0] / ratio, im.shape[1] / ratio)
+    print("make_scaled_ims")
+
+    # shape = (im.shape[0] / 0.5, im.shape[1] / 0.5)
+
+    shape = (im.shape)
+
+    ratio =  0.9   #1. / 2 ** 0.5
+    # ratio = 0.5
+    # print("ratio",ratio)
+    # shape = (im.shape[0] / ratio, im.shape[1] / ratio)
+    shape = (shape[0] / ratio, shape[1] / ratio)
+    print("shape",shape,min_shape)
 
     while True:
         shape = (int(shape[0] * ratio), int(shape[1] * ratio))
+        print("shape",shape,min_shape)
         if shape[0] < min_shape[0] or shape[1] < min_shape[1]:
             break
         yield cv2.resize(im, (shape[1], shape[0]))
@@ -87,10 +98,15 @@ def detect(im, param_vals):
     # Execute the model at each scale.
     with tf.Session(config=tf.ConfigProto()) as sess:
         y_vals = []
+        print("Execute the model at each scale.")
         for scaled_im in scaled_ims:
+            print(" scale ",scaled_im.shape)
             feed_dict = {x: numpy.stack([scaled_im])}
             feed_dict.update(dict(zip(params, param_vals)))
-            y_vals.append(sess.run(y, feed_dict=feed_dict))
+            test = sess.run(y, feed_dict=feed_dict)
+            print("test",test[0,:,:,0])
+            # y_vals.append(sess.run(y, feed_dict=feed_dict))
+            y_vals.append(test)
 
     # Interpret the results in terms of bounding boxes in the input image.
     # Do this by identifying windows (at all scales) where the model predicts a
@@ -99,12 +115,14 @@ def detect(im, param_vals):
     # To obtain pixel coordinates, the window coordinates are scaled according
     # to the stride size, and pixel coordinates.
     for i, (scaled_im, y_val) in enumerate(zip(scaled_ims, y_vals)):
-        for window_coords in numpy.argwhere(y_val[0, :, :, 0] >
-                                                       -math.log(1./0.99 - 1)):
+        print("Interpret", i,scaled_im.shape,y_val.shape)
+        for window_coords in numpy.argwhere(y_val[0, :, :, 0] > #-2 ):
+                                                       -math.log(1./0.6 - 1)):
+            print("window_coords",window_coords)
             letter_probs = (y_val[0,
                                   window_coords[0],
                                   window_coords[1], 1:].reshape(
-                                    7, len(common.CHARS)))
+                                    13, len(common.CHARS)))
             letter_probs = common.softmax(letter_probs)
 
             img_scale = float(im.shape[0]) / scaled_im.shape[0]
@@ -114,7 +132,7 @@ def detect(im, param_vals):
 
             present_prob = common.sigmoid(
                                y_val[0, window_coords[0], window_coords[1], 0])
-
+            print(bbox_tl, bbox_tl + bbox_size, present_prob, letter_probs)
             yield bbox_tl, bbox_tl + bbox_size, present_prob, letter_probs
 
 
@@ -137,7 +155,7 @@ def _group_overlapping_rectangles(matches):
                 match_to_group[idx1] = match_to_group[idx2]
                 break
         else:
-            match_to_group[idx1] = num_groups 
+            match_to_group[idx1] = num_groups
             num_groups += 1
 
     groups = collections.defaultdict(list)
@@ -192,10 +210,11 @@ if __name__ == "__main__":
         color = (0.0, 255.0, 0.0)
         cv2.rectangle(im, pt1, pt2, color)
 
+        print(code)
         cv2.putText(im,
                     code,
                     pt1,
-                    cv2.FONT_HERSHEY_PLAIN, 
+                    cv2.FONT_HERSHEY_PLAIN,
                     1.5,
                     (0, 0, 0),
                     thickness=5)
@@ -203,10 +222,9 @@ if __name__ == "__main__":
         cv2.putText(im,
                     code,
                     pt1,
-                    cv2.FONT_HERSHEY_PLAIN, 
+                    cv2.FONT_HERSHEY_PLAIN,
                     1.5,
                     (255, 255, 255),
                     thickness=2)
 
     cv2.imwrite(sys.argv[3], im)
-
